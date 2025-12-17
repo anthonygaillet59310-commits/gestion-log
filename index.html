@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Toyota Logistics - Gestion Camions V2</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        toyota: '#eb0a1e',
+                        slate: { 950: '#020617' }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+
+    <!-- JSPDF for PDF Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        body { 
+            touch-action: manipulation; 
+            -webkit-tap-highlight-color: transparent; 
+            transition: background-color 0.3s;
+        }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        
+        .dark body { background-color: #020617; color: #f8fafc; }
+        .dark .bg-white { background-color: #0f172a; border-color: #1e293b; }
+        
+        input[type="checkbox"]:checked { background-color: #3b82f6; }
+
+        /* Signature Canvas Style */
+        canvas { touch-action: none; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- 1. ICONES PROFESSIONNELLES ---
+        const Icons = {
+            Home: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+            List: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>,
+            Calendar: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>,
+            Settings: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+            Truck: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="16" height="13" x="2" y="6" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="7" cy="19" r="2"/><circle cx="17" cy="19" r="2"/></svg>,
+            Check: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+            CheckCircle: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
+            AlertTriangle: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+            ChevronRight: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>,
+            ChevronLeft: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>,
+            ChevronDown: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>,
+            Search: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
+            Trash2: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>,
+            Plus: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+            Loader2: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
+            Mail: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>,
+            BarChart: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>,
+            LogOut: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>,
+            Sun: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M22 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>,
+            Moon: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>,
+            User: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+            Filter: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>,
+            Download: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>,
+            Clock: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+            PenTool: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>,
+            Shield: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+            FileText: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>,
+            Camera: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>,
+        };
+
+        // --- 2. UTILS ---
+        const getWeekNumber = (d) => {
+            if (!d) return null;
+            const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+            date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+            const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+            return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+        };
+
+        const getDockStyle = (dock) => {
+            const base = "px-2 py-0.5 rounded text-[10px] font-bold border ";
+            if (dock.includes('Bleu')) return base + "bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-900/20 dark:border-blue-800";
+            if (dock.includes('Rouge')) return base + "bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-900/20 dark:border-rose-800";
+            if (dock.includes('Quai 1')) return base + "bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-800";
+            return base + "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:border-slate-700";
+        };
+
+        const generatePDF = (item) => {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const width = doc.internal.pageSize.getWidth();
+            const height = doc.internal.pageSize.getHeight();
+            
+            // --- HEADER Minimaliste ---
+            doc.setFillColor(235, 10, 30); // Toyota Red
+            doc.rect(0, 0, width, 5, 'F'); 
+            
+            doc.setFontSize(24);
+            doc.setTextColor(50, 50, 50);
+            doc.setFont('helvetica', 'bold');
+            doc.text('FICHE DE CONTRÔLE', 20, 30);
+            
+            doc.setFontSize(10);
+            doc.setTextColor(150, 150, 150);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`N° BL: ${item.blNumber || 'Non renseigné'}`, 20, 36);
+
+            doc.setFontSize(14);
+            doc.setTextColor(235, 10, 30);
+            doc.setFont('helvetica', 'bold');
+            doc.text('TOYOTA', width - 20, 30, { align: 'right' });
+
+            // --- INFO GRID ---
+            let y = 60;
+            const col1 = 20;
+            const col2 = 110;
+
+            const addField = (label, value, x, y) => {
+                doc.setFontSize(9);
+                doc.setTextColor(150, 150, 150);
+                doc.setFont('helvetica', 'bold');
+                doc.text(label.toUpperCase(), x, y);
+                doc.setFontSize(12);
+                doc.setTextColor(0, 0, 0);
+                doc.setFont('helvetica', 'normal');
+                doc.text(value || '-', x, y + 6);
+            };
+
+            const dateObj = new Date(item.timestamp?.seconds * 1000);
+            const dateStr = dateObj.toLocaleDateString('fr-FR');
+            const timeStr = dateObj.toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
+
+            addField('Date', dateStr, col1, y);
+            addField('Heure', timeStr, col2, y);
+            y += 25;
+
+            addField('Transporteur', item.plate, col1, y);
+            
+            doc.setFontSize(9);
+            doc.setTextColor(150, 150, 150);
+            doc.setFont('helvetica', 'bold');
+            doc.text('STATUT', col2, y);
+            doc.setFontSize(12);
+            if(item.status === 'OK') doc.setTextColor(0, 150, 0);
+            else doc.setTextColor(235, 10, 30);
+            doc.setFont('helvetica', 'bold');
+            doc.text(item.status, col2, y + 6);
+            y += 35;
+            
+            doc.setDrawColor(240, 240, 240);
+            doc.line(20, y, width - 20, y);
+            y += 15;
+
+            // --- DETAILS / LITIGE ---
+            doc.setFontSize(9);
+            doc.setTextColor(150, 150, 150);
+            doc.setFont('helvetica', 'bold');
+            doc.text('DÉTAILS / LITIGE', 20, y);
+            y += 8;
+
+            doc.setFontSize(11);
+            doc.setTextColor(0, 0, 0);
+            doc.setFont('helvetica', 'normal');
+            
+            const problemText = item.problem || "R.A.S. (Rien à signaler)";
+            const splitText = doc.splitTextToSize(problemText, width - 40);
+            doc.text(splitText, 20, y);
+            
+            y += Math.max(20, splitText.length * 6);
+
+            // --- EPI ---
+            if(item.epi && Object.values(item.epi).some(v => v)) {
+                y += 10;
+                doc.setFontSize(9);
+                doc.setTextColor(150, 150, 150);
+                doc.setFont('helvetica', 'bold');
+                doc.text('EPI CONTRÔLÉS', 20, y);
+                y += 6;
+                doc.setFontSize(10);
+                doc.setTextColor(80, 80, 80);
+                doc.setFont('helvetica', 'normal');
+                const epiList = Object.entries(item.epi).filter(([k,v]) => v).map(([k,v]) => k.charAt(0).toUpperCase() + k.slice(1)).join(', ');
+                doc.text(epiList, 20, y);
+                y += 20;
+            }
+
+            // --- PHOTO PREUVE ---
+            if(item.photo) {
+                // S'assurer qu'il reste de la place sur la page, sinon nouvelle page
+                if (y > height - 120) {
+                    doc.addPage();
+                    y = 20;
+                }
+                
+                y += 10;
+                doc.setFontSize(9);
+                doc.setTextColor(150, 150, 150);
+                doc.setFont('helvetica', 'bold');
+                doc.text('PREUVE PHOTOGRAPHIQUE', 20, y);
+                y += 5;
+                
+                try {
+                    // Ratio image
+                    const imgProps = doc.getImageProperties(item.photo);
+                    const pdfImgWidth = 100;
+                    const pdfImgHeight = (imgProps.height * pdfImgWidth) / imgProps.width;
+                    
+                    doc.addImage(item.photo, 'JPEG', 20, y, pdfImgWidth, pdfImgHeight);
+                    y += pdfImgHeight + 10;
+                } catch(e) {
+                    doc.text('(Erreur affichage image)', 20, y + 10);
+                    y += 20;
+                }
+            }
+
+            // --- SIGNATURE ---
+            const sigY = height - 50;
+            doc.setDrawColor(240, 240, 240);
+            doc.line(20, sigY, width - 20, sigY);
+            
+            doc.setFontSize(9);
+            doc.setTextColor(150, 150, 150);
+            doc.setFont('helvetica', 'bold');
+            doc.text('SIGNATURE CHAUFFEUR', 20, sigY + 10);
+            
+            if (item.signature) {
+                try {
+                    doc.addImage(item.signature, 'PNG', 20, sigY + 12, 40, 25);
+                } catch(e) {}
+            } else {
+                doc.setFontSize(10);
+                doc.setTextColor(200, 200, 200);
+                doc.setFont('helvetica', 'italic');
+                doc.text('Non signé', 20, sigY + 20);
+            }
+
+            doc.setFontSize(8);
+            doc.setTextColor(200, 200, 200);
+            doc.text(`Généré le ${new Date().toLocaleString()}`, width - 20, height - 10, {align: 'right'});
+
+            doc.save(`Fiche_${item.plate}_${item.blNumber || 'Scan'}.pdf`);
+        };
+
+        // --- 3. CONFIG FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDReNk4YmZTO1OfTdGiB50osAQ0PmuoMcw",
+            authDomain: "gestion-camion-122c6.firebaseapp.com",
+            projectId: "gestion-camion-122c6",
+            storageBucket: "gestion-camion-122c6.firebasestorage.app",
+            messagingSenderId: "462351150312",
+            appId: "1:462351150312:web:c08c26d4a5cdfa4042ed5d",
+            measurementId: "G-SDNZ31BBR9"
+        };
+        const appId = 'gestion-camion-prod-v2';
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        const deliveryStatuses = [
+            { value: 'OK', label: 'Conforme', color: 'emerald', icon: Icons.CheckCircle },
+            { value: 'DAMAGED', label: 'Dommages', color: 'rose', icon: Icons.AlertTriangle },
+            { value: 'MISSING', label: 'Manquant', color: 'amber', icon: Icons.AlertTriangle },
+            { value: 'LATE', label: 'Retard', color: 'slate', icon: Icons.Clock },
+        ];
+
+        // --- 4. COMPOSANTS VUES ---
+
+        const LoginView = () => {
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                const email = username.trim() + "@toyota.app";
+                try {
+                    await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
+                    await auth.signInWithEmailAndPassword(email, password);
+                } catch (err) { alert("Accès refusé."); }
+                setLoading(false);
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-white dark:bg-slate-950 p-6 animate-fade-in">
+                    <div className="w-full max-w-sm text-center">
+                        <div className="bg-red-600 p-4 rounded-3xl text-white shadow-xl shadow-red-500/20 inline-block mb-8">
+                            <Icons.Truck className="w-12 h-12" />
+                        </div>
+                        <h2 className="text-2xl font-bold tracking-tight mb-8">Logistique Toyota</h2>
+                        <form onSubmit={handleLogin} className="space-y-4 text-left">
+                            <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl outline-none text-sm font-medium focus:ring-2 focus:ring-red-500/20 dark:text-white" placeholder="Identifiant" required />
+                            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl outline-none text-sm font-medium focus:ring-2 focus:ring-red-500/20 dark:text-white" placeholder="Mot de passe" required />
+                            <button type="submit" disabled={loading} className="w-full bg-red-600 text-white py-4 rounded-2xl font-bold text-sm shadow-lg shadow-red-600/20 active:scale-95 transition-transform">
+                                {loading ? "Vérification..." : "Se connecter"}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const HomeView = ({ setView }) => {
+            const [stats, setStats] = useState({ count: 0, total: 0 });
+            const [lateTrucks, setLateTrucks] = useState([]);
+
+            useEffect(() => {
+                const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+                const today = days[new Date().getDay()];
+                const start = new Date(); start.setHours(0,0,0,0);
+                return db.collection(`artifacts/${appId}/public/data/planning`).doc(today).onSnapshot(doc => {
+                    const plan = doc.exists ? doc.data().entries || [] : [];
+                    db.collection(`artifacts/${appId}/public/data/arrivals`).where('timestamp', '>=', start).get().then(snap => {
+                        const arrived = snap.docs.map(d => d.data().plate.toLowerCase());
+                        const nowStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                        setStats({ count: plan.filter(p => arrived.includes(p.driver.toLowerCase())).length, total: plan.length });
+                        setLateTrucks(plan.filter(p => !arrived.includes(p.driver.toLowerCase()) && p.time < nowStr));
+                    });
+                });
+            }, []);
+
+            return (
+                <div className="space-y-6 animate-fade-in pb-24 pt-6">
+                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-[2.5rem] text-white shadow-xl shadow-blue-600/20 relative overflow-hidden">
+                        <Icons.Truck className="absolute -right-8 -bottom-8 w-40 h-40 opacity-10" />
+                        <h1 className="text-2xl font-black mb-1">Logistique</h1>
+                        <p className="text-blue-100 text-sm font-medium opacity-80 uppercase tracking-widest">Activité du jour</p>
+                        
+                        <div className="mt-8 flex justify-between items-end">
+                            <div>
+                                <span className="text-4xl font-black">{stats.count}</span>
+                                <span className="text-blue-200 text-lg font-bold ml-1">/ {stats.total} camions</span>
+                            </div>
+                            <div className="text-right">
+                                <span className="text-xs font-bold bg-white/20 px-3 py-1 rounded-full uppercase">Flux Actif</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {lateTrucks.length > 0 && (
+                        <div className="bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 p-4 rounded-r-xl shadow-sm animate-pulse">
+                            <div className="flex items-center text-rose-600 dark:text-rose-400 font-bold text-xs uppercase mb-1"><Icons.AlertTriangle className="w-3.5 h-3.5 mr-1.5" /> Retard détecté</div>
+                            {lateTrucks.map(t => <div key={t.id} className="text-[10px] font-bold text-rose-800 dark:text-rose-300 uppercase flex justify-between"><span>{t.driver}</span><span>{t.time}</span></div>)}
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 gap-4">
+                        {[
+                            { id: 'LITIGE', title: 'Flux & Litiges', icon: Icons.List, color: 'blue', desc: 'Saisir un arrivage' },
+                            { id: 'PLANNING', title: 'Planning Quai', icon: Icons.Calendar, color: 'purple', desc: 'Gestion hebdomadaire' },
+                            { id: 'RESULTS', title: 'Statistiques', icon: Icons.BarChart, color: 'emerald', desc: 'Performances qualité' }
+                        ].map(item => (
+                            <button key={item.id} onClick={() => setView(item.id)} className={`flex items-center gap-4 p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all shadow-sm active:scale-95`}>
+                                <div className={`w-12 h-12 rounded-2xl bg-${item.color}-50 dark:bg-${item.color}-900/20 flex items-center justify-center text-${item.color}-600 dark:text-${item.color}-400`}>
+                                    <item.icon className="w-6 h-6" />
+                                </div>
+                                <div className="text-left flex-1">
+                                    <h3 className="font-bold text-slate-800 dark:text-white">{item.title}</h3>
+                                    <p className="text-[11px] text-slate-400 font-semibold uppercase">{item.desc}</p>
+                                </div>
+                                <Icons.ChevronRight className="w-5 h-5 text-slate-300" />
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const SignaturePad = ({ onSave, onClear }) => {
+            const canvasRef = useRef(null);
+            const [isDrawing, setIsDrawing] = useState(false);
+
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.strokeStyle = '#000';
+                
+                const rect = canvas.parentElement.getBoundingClientRect();
+                canvas.width = rect.width;
+                canvas.height = 150;
+            }, []);
+
+            const getPos = (e) => {
+                const rect = canvasRef.current.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                return { x: clientX - rect.left, y: clientY - rect.top };
+            };
+
+            const start = (e) => { setIsDrawing(true); const {x,y} = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(x,y); };
+            const move = (e) => { if(!isDrawing) return; e.preventDefault(); const {x,y} = getPos(e); const ctx = canvasRef.current.getContext('2d'); ctx.lineTo(x,y); ctx.stroke(); };
+            const end = () => { setIsDrawing(false); onSave(canvasRef.current.toDataURL()); };
+
+            return (
+                <div className="w-full">
+                    <div className="border border-slate-300 dark:border-slate-700 bg-white dark:bg-white rounded-xl overflow-hidden touch-none relative h-[150px]">
+                        <canvas 
+                            ref={canvasRef}
+                            onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
+                            onTouchStart={start} onTouchMove={move} onTouchEnd={end}
+                            className="w-full h-full block"
+                        />
+                        <div className="absolute top-2 right-2 text-[8px] text-slate-400 pointer-events-none">Signature Chauffeur</div>
+                    </div>
+                    <button type="button" onClick={() => { 
+                        const ctx = canvasRef.current.getContext('2d'); 
+                        ctx.clearRect(0,0, canvasRef.current.width, canvasRef.current.height); 
+                        onClear(); 
+                    }} className="text-[10px] text-red-500 mt-1 font-bold">Effacer</button>
+                </div>
+            );
+        };
+
+        const LitigeView = ({ user }) => {
+            const [activeTab, setActiveTab] = useState('new');
+            const [step, setStep] = useState(1);
+            const [transporter, setTransporter] = useState('');
+            const [blNumber, setBlNumber] = useState('');
+            const [status, setStatus] = useState('OK');
+            const [problem, setProblem] = useState('');
+            const [list, setList] = useState([]);
+            const [recipients, setRecipients] = useState([]);
+            const [transportersList, setTransportersList] = useState([]);
+            const [selectedRecipients, setSelectedRecipients] = useState([]);
+            const [dailyPlanning, setDailyPlanning] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [selectedWeek, setSelectedWeek] = useState('all');
+            const [expandedId, setExpandedId] = useState(null);
+            
+            const [epiCheck, setEpiCheck] = useState({ gilet: false, chaussures: false, protocole: false });
+            const [signature, setSignature] = useState(null);
+            const [photo, setPhoto] = useState(null);
+
+            useEffect(() => {
+                const unsubA = db.collection(`artifacts/${appId}/public/data/arrivals`).orderBy('timestamp', 'desc').onSnapshot(snap => {
+                    setList(snap.docs.map(d => ({ id: d.id, ...d.data(), date: d.data().timestamp?.toDate() })));
+                });
+                const unsubR = db.collection(`artifacts/${appId}/public/data/recipients`).onSnapshot(snap => {
+                    const emails = snap.docs.map(d => d.data().email);
+                    setRecipients(emails);
+                    setSelectedRecipients(emails);
+                });
+                const unsubT = db.collection(`artifacts/${appId}/public/data/transporters`).onSnapshot(snap => {
+                    setTransportersList(snap.docs.map(d => d.data().name));
+                });
+                const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+                db.collection(`artifacts/${appId}/public/data/planning`).doc(days[new Date().getDay()]).get().then(doc => {
+                    if(doc.exists) setDailyPlanning(doc.data().entries || []);
+                });
+                return () => { unsubA(); unsubR(); unsubT(); };
+            }, []);
+
+            const availableWeeks = useMemo(() => {
+                const weeks = list.map(i => i.date ? getWeekNumber(i.date) : null).filter(Boolean);
+                return [...new Set(weeks)].sort((a,b) => b - a);
+            }, [list]);
+
+            const filteredList = list.filter(i => {
+                const matchesSearch = i.plate.toLowerCase().includes(searchTerm.toLowerCase());
+                const itemWeek = i.date ? getWeekNumber(i.date) : null;
+                const matchesWeek = selectedWeek === 'all' ? true : itemWeek === parseInt(selectedWeek);
+                return matchesSearch && matchesWeek;
+            });
+
+            const toggleRecipient = (email) => {
+                setSelectedRecipients(prev => prev.includes(email) ? prev.filter(e => e !== email) : [...prev, email]);
+            };
+
+            const handlePhoto = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            const maxDim = 800; // Resize to max 800px to save DB space
+                            let w = img.width;
+                            let h = img.height;
+                            if (w > h) { if (w > maxDim) { h *= maxDim / w; w = maxDim; } } 
+                            else { if (h > maxDim) { w *= maxDim / h; h = maxDim; } }
+                            canvas.width = w;
+                            canvas.height = h;
+                            ctx.drawImage(img, 0, 0, w, h);
+                            setPhoto(canvas.toDataURL('image/jpeg', 0.6));
+                        };
+                        img.src = event.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                
+                if (status !== 'OK' && selectedRecipients.length > 0) {
+                    const subject = encodeURIComponent(`ALERTE LOGISTIQUE : ${transporter}`);
+                    const body = encodeURIComponent(`Litige déclaré.\n\nTransporteur: ${transporter}\nBL: ${blNumber}\nStatut: ${status}\nNotes: ${problem}\nEPI: ${JSON.stringify(epiCheck)}\nDate: ${new Date().toLocaleString()}`);
+                    window.location.href = `mailto:${selectedRecipients.join(',')}?subject=${subject}&body=${body}`;
+                }
+
+                await db.collection(`artifacts/${appId}/public/data/arrivals`).add({
+                    plate: transporter, blNumber, status, problem, userId: user.uid, resolved: false, 
+                    recipients: selectedRecipients, epi: epiCheck, signature: signature, photo: photo,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                setLoading(false); 
+                // Reset form
+                setStep(1); setTransporter(''); setBlNumber(''); setProblem(''); setStatus('OK'); 
+                setEpiCheck({ gilet: false, chaussures: false, protocole: false }); setSignature(null); setPhoto(null);
+                setActiveTab('history');
+            };
+
+            const toggleResolved = async (e, id, current) => {
+                e.stopPropagation();
+                await db.collection(`artifacts/${appId}/public/data/arrivals`).doc(id).update({ resolved: !current });
+            };
+
+            return (
+                <div className="animate-fade-in pb-24">
+                    <div className="flex bg-slate-200/50 dark:bg-slate-800 p-1 rounded-2xl mb-6 mt-6 shadow-inner">
+                        <button onClick={() => setActiveTab('new')} className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all ${activeTab === 'new' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600' : 'text-slate-500'}`}>Saisie</button>
+                        <button onClick={() => setActiveTab('history')} className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all ${activeTab === 'history' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600' : 'text-slate-500'}`}>Historique</button>
+                    </div>
+
+                    {activeTab === 'new' ? (
+                        step === 1 ? (
+                            <div className="space-y-4">
+                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Planning du jour</h3>
+                                <div className="grid gap-3">
+                                    {dailyPlanning.length > 0 ? dailyPlanning.map(p => (
+                                        <button key={p.id} onClick={() => {setTransporter(p.driver); setStep(2);}} className="w-full p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl text-left flex items-center justify-between group shadow-sm active:bg-blue-50">
+                                            <div className="flex items-center gap-4">
+                                                <span className="text-xs font-black text-slate-300 w-10">{p.time}</span>
+                                                <span className="font-bold dark:text-slate-200">{p.driver}</span>
+                                            </div>
+                                            <div className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${getDockStyle(p.dock)}`}>{p.dock}</div>
+                                        </button>
+                                    )) : <p className="text-center py-4 text-slate-400 text-xs italic">Rien de prévu</p>}
+                                </div>
+                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mt-6">Sélection Rapide</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {transportersList.map(t => (
+                                        <button key={t} onClick={() => {setTransporter(t); setStep(2);}} className="px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold hover:bg-slate-50">
+                                            {t}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="pt-8 border-t border-slate-200 dark:border-slate-800">
+                                    <input value={transporter} onChange={e => setTransporter(e.target.value)} placeholder="Autre transporteur..." className="w-full p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl outline-none text-sm mb-3 dark:text-white focus:ring-2 focus:ring-blue-500/20" />
+                                    <button onClick={() => setStep(2)} disabled={!transporter} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-sm shadow-xl shadow-blue-600/20 transition-all active:scale-95 disabled:opacity-30">Suivant</button>
+                                </div>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleSubmit} className="space-y-6">
+                                <div className="flex items-center gap-2 text-slate-400 cursor-pointer" onClick={() => setStep(1)}>
+                                    <Icons.ChevronLeft className="w-4 h-4" />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">Retour</span>
+                                </div>
+                                <div>
+                                    <h2 className="text-2xl font-black dark:text-white uppercase tracking-tight">{transporter}</h2>
+                                    <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Détails livraison</p>
+                                </div>
+
+                                <div className="mb-4">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-2 mb-1 block">Numéro de BL</label>
+                                    <input 
+                                        value={blNumber} 
+                                        onChange={e => setBlNumber(e.target.value)} 
+                                        placeholder="Ex: 123456789" 
+                                        className="w-full p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl outline-none text-sm dark:text-white focus:ring-2 focus:ring-blue-500/20" 
+                                    />
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-3">
+                                    {deliveryStatuses.map(s => (
+                                        <button key={s.value} type="button" onClick={() => setStatus(s.value)} className={`flex flex-col items-center justify-center p-5 rounded-3xl border-2 transition-all ${status === s.value ? `bg-${s.color}-50 border-${s.color}-500 text-${s.color}-600` : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-400'}`}>
+                                            <s.icon className="w-6 h-6 mb-2" />
+                                            <span className="text-[9px] font-black uppercase tracking-widest">{s.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-3xl shadow-sm space-y-3">
+                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Icons.Shield className="w-3 h-3 text-emerald-500"/> Sécurité & EPI</h4>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {['Gilet', 'Chaussures', 'Protocole'].map(item => {
+                                            const key = item.toLowerCase().replace('é', 'e'); // simple slug
+                                            return (
+                                                <label key={item} className={`flex flex-col items-center justify-center p-3 rounded-2xl border cursor-pointer transition-all ${epiCheck[key] ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-slate-50 dark:bg-slate-800 border-transparent text-slate-400'}`}>
+                                                    <input type="checkbox" checked={!!epiCheck[key]} onChange={() => setEpiCheck(p => ({...p, [key]: !p[key]}))} className="hidden" />
+                                                    <span className="text-[10px] font-bold uppercase">{item}</span>
+                                                    {epiCheck[key] && <Icons.Check className="w-3 h-3 mt-1" />}
+                                                </label>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* SECTION PHOTO */}
+                                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-3xl shadow-sm">
+                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><Icons.Camera className="w-3 h-3 text-blue-500"/> Preuves Photos</h4>
+                                    <label className="w-full h-24 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                        {photo ? (
+                                            <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-2xl">
+                                                <img src={photo} className="object-cover h-full w-full opacity-60" />
+                                                <div className="absolute inset-0 flex items-center justify-center">
+                                                    <span className="bg-slate-900 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-lg">Modifier</span>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <Icons.Camera className="w-6 h-6 text-slate-400 mb-1" />
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase">Ajouter une photo</span>
+                                            </>
+                                        )}
+                                        <input type="file" accept="image/*" capture="environment" onChange={handlePhoto} className="hidden" />
+                                    </label>
+                                </div>
+                                
+                                <textarea value={problem} onChange={e => setProblem(e.target.value)} placeholder="Commentaires ou détails du problème..." rows="3" className="w-full p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl text-sm outline-none focus:border-slate-400 dark:text-white shadow-sm" />
+                                
+                                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-3xl shadow-sm">
+                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><Icons.PenTool className="w-3 h-3 text-purple-500"/> Signature</h4>
+                                    <SignaturePad onSave={setSignature} onClear={() => setSignature(null)} />
+                                </div>
+
+                                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-3xl shadow-sm">
+                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Icons.Mail className="w-3 h-3 text-blue-500"/> Notifier par Email</h4>
+                                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                                        {recipients.length > 0 ? recipients.map(email => (
+                                            <label key={email} className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-colors border ${selectedRecipients.includes(email) ? 'bg-blue-50 border-blue-100 dark:bg-blue-900/20' : 'bg-slate-50 border-transparent dark:bg-slate-800/50'}`}>
+                                                <input type="checkbox" checked={selectedRecipients.includes(email)} onChange={() => toggleRecipient(email)} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                                                <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{email}</span>
+                                            </label>
+                                        )) : <p className="text-[10px] text-slate-400 italic">Aucun destinataire.</p>}
+                                    </div>
+                                </div>
+
+                                <button type="submit" disabled={loading} className="w-full py-5 bg-blue-600 text-white rounded-[2rem] font-black text-sm shadow-2xl shadow-blue-600/20 transition-transform active:scale-95 flex items-center justify-center gap-3">
+                                    {loading ? <Icons.Loader2 className="w-5 h-5" /> : <>Finaliser l'arrivage <Icons.ChevronRight className="w-4 h-4" /></>}
+                                </button>
+                            </form>
+                        )
+                    ) : (
+                        <div className="space-y-4">
+                            <div className="flex gap-2">
+                                <div className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex items-center px-4 shadow-sm">
+                                    <Icons.Search className="w-4 h-4 text-slate-300 mr-3" />
+                                    <input type="text" placeholder="Filtrer..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-3 text-sm bg-transparent outline-none dark:text-white" />
+                                </div>
+                                <select value={selectedWeek} onChange={e => setSelectedWeek(e.target.value)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 text-xs font-black outline-none dark:text-white shadow-sm uppercase tracking-tighter">
+                                    <option value="all">S-TOUTES</option>
+                                    {availableWeeks.map(w => <option key={w} value={w}>S-{w}</option>)}
+                                </select>
+                            </div>
+
+                            <div className="space-y-3">
+                                {filteredList.map(item => {
+                                    const st = deliveryStatuses.find(s => s.value === item.status) || deliveryStatuses[0];
+                                    const isExp = expandedId === item.id;
+                                    const week = getWeekNumber(item.date);
+                                    return (
+                                        <div key={item.id} onClick={() => setExpandedId(isExp ? null : item.id)} className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-[2rem] transition-all cursor-pointer shadow-sm ${isExp ? 'ring-2 ring-blue-500/20' : ''}`}>
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="font-black text-slate-800 dark:text-white">{item.plate}</span>
+                                                        <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border border-${st.color}-200 text-${st.color}-600 bg-${st.color}-50 uppercase tracking-widest`}>{st.label}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{item.date?.toLocaleDateString()} • {item.date?.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                                                        {item.blNumber && <span className="text-[9px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">BL: {item.blNumber}</span>}
+                                                    </div>
+                                                </div>
+                                                <Icons.ChevronDown className={`w-5 h-5 text-slate-300 transition-transform ${isExp ? 'rotate-180 text-blue-500' : ''}`} />
+                                            </div>
+                                            {isExp && (
+                                                <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800 animate-fade-in space-y-4" onClick={e => e.stopPropagation()}>
+                                                    <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl space-y-2">
+                                                        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed italic">"{item.problem || 'Aucun commentaire.'}"</p>
+                                                        <div className="flex flex-wrap gap-2 mt-2">
+                                                            {item.epi && Object.entries(item.epi).map(([k,v]) => v && <span key={k} className="text-[8px] px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg uppercase font-bold">{k}</span>)}
+                                                            {item.photo && <span className="text-[8px] px-2 py-1 bg-blue-100 text-blue-700 rounded-lg uppercase font-bold flex items-center gap-1"><Icons.Camera className="w-3 h-3"/> Photo jointe</span>}
+                                                        </div>
+                                                        {/* Affichage de la photo dans l'historique si étendue */}
+                                                        {item.photo && (
+                                                            <div className="mt-2 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
+                                                                <img src={item.photo} alt="Preuve" className="w-full h-auto max-h-48 object-cover" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <button onClick={() => generatePDF(item)} className="py-3 bg-slate-900 text-white dark:bg-white dark:text-black rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2">
+                                                            <Icons.FileText className="w-3 h-3"/> PDF
+                                                        </button>
+                                                        {item.status !== 'OK' && (
+                                                            <button onClick={(e) => toggleResolved(e, item.id, item.resolved)} className={`py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm ${item.resolved ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-500 text-white shadow-amber-500/20'}`}>
+                                                                {item.resolved ? 'Traité' : 'Clôturer'}
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex justify-between items-center text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">
+                                                        <span>Semaine {week}</span>
+                                                        <button onClick={() => db.collection(`artifacts/${appId}/public/data/arrivals`).doc(item.id).delete()} className="text-rose-500 p-2 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl"><Icons.Trash2 className="w-4 h-4" /></button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const PlanningView = () => {
+            const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
+            const dockOptions = ['Quai 1', 'Quai 2', 'Quai 3', 'Quai 4', 'Dima Bleu', 'Dima Rouge'];
+            const [selectedDay, setSelectedDay] = useState(null);
+            const [data, setData] = useState({});
+            const [newE, setNewE] = useState({ driver: '', time: '', dock: 'Quai 1' });
+
+            useEffect(() => {
+                return db.collection(`artifacts/${appId}/public/data/planning`).onSnapshot(snap => {
+                    const d = {}; snap.docs.forEach(doc => d[doc.id] = doc.data().entries || []);
+                    setData(d);
+                });
+            }, []);
+
+            const save = (day, entries) => db.collection(`artifacts/${appId}/public/data/planning`).doc(day).set({ entries }, { merge: true });
+            const add = () => { if(!newE.driver || !newE.time) return; const list = [...(data[selectedDay] || []), { ...newE, id: Date.now().toString() }]; list.sort((a,b)=>a.time.localeCompare(b.time)); save(selectedDay, list); setNewE({driver:'', time:'', dock:'Quai 1'}); };
+
+            if(!selectedDay) return (
+                <div className="space-y-4 animate-fade-in pb-24 pt-6">
+                    <h2 className="text-3xl font-black dark:text-white mb-6 uppercase tracking-tight">Planning</h2>
+                    <div className="grid gap-3">
+                        {days.map(d => (
+                            <button key={d} onClick={() => setSelectedDay(d)} className="w-full p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] flex justify-between items-center group shadow-sm active:scale-95 transition-all">
+                                <span className="font-black text-slate-700 dark:text-slate-200 uppercase tracking-[0.2em]">{d}</span>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-[10px] font-black bg-purple-50 dark:bg-purple-900/20 text-purple-600 px-3 py-1 rounded-full uppercase tracking-widest">{(data[d] || []).length} FLUX</span>
+                                    <Icons.ChevronRight className="w-4 h-4 text-slate-300" />
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="animate-fade-in pb-24 pt-6">
+                    <button onClick={() => setSelectedDay(null)} className="flex items-center gap-2 text-slate-400 mb-8"><Icons.ChevronLeft className="w-4 h-4" /><span className="text-[10px] font-black uppercase tracking-widest">Calendrier</span></button>
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[3rem] overflow-hidden shadow-sm">
+                        <div className="p-6 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black uppercase tracking-widest text-sm flex justify-between">
+                            <span>{selectedDay}</span>
+                            <Icons.Calendar className="w-5 h-5 opacity-40"/>
+                        </div>
+                        <div className="divide-y divide-slate-50 dark:divide-slate-800">
+                            {(data[selectedDay] || []).map(e => (
+                                <div key={e.id} className="p-5 flex justify-between items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                    <div className="flex items-center gap-4"><span className="text-xs font-black text-slate-300 w-12 tracking-widest">{e.time}</span><span className="font-bold dark:text-slate-300">{e.driver}</span></div>
+                                    <button onClick={() => save(selectedDay, data[selectedDay].filter(x=>x.id!==e.id))} className="text-slate-200 hover:text-rose-500 p-2 transition-colors"><Icons.Trash2 className="w-4 h-4" /></button>
+                                </div>
+                            ))}
+                            <div className="p-6 bg-slate-50/50 dark:bg-slate-800/20 space-y-3">
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 text-center">Ajouter un créneau</p>
+                                <div className="flex gap-2">
+                                    <input type="time" value={newE.time} onChange={x=>setNewE({...newE, time: x.target.value})} className="w-24 p-4 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold dark:text-white outline-none" />
+                                    <input placeholder="Société..." value={newE.driver} onChange={x=>setNewE({...newE, driver: x.target.value})} className="flex-1 p-4 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold dark:text-white outline-none" />
+                                </div>
+                                <select value={newE.dock} onChange={e=>setNewE({...newE, dock: e.target.value})} className="w-full p-4 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold dark:text-white outline-none">
+                                    {dockOptions.map(o => <option key={o} value={o}>{o}</option>)}
+                                </select>
+                                <button onClick={add} className="w-full p-4 bg-slate-900 dark:bg-white dark:text-slate-950 text-white dark:text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-transform">Valider</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ResultsView = () => {
+            const [kpi, setKpi] = useState({ total: 0, ok: 0, nok: 0, byTransporter: [] });
+            const [timeRange, setTimeRange] = useState('7d'); // '7d', '1m', '1y'
+            const [rawData, setRawData] = useState([]);
+
+            useEffect(() => {
+                const unsub = db.collection(`artifacts/${appId}/public/data/arrivals`).onSnapshot(snap => {
+                    const allData = snap.docs.map(d => ({...d.data(), id: d.id, dateObj: d.data().timestamp?.toDate() }));
+                    setRawData(allData);
+                });
+                return unsub;
+            }, []);
+
+            useEffect(() => {
+                // Filter Data based on timeRange
+                if(!rawData.length) return;
+
+                const now = new Date();
+                const cutoff = new Date();
+                if(timeRange === '7d') cutoff.setDate(now.getDate() - 7);
+                if(timeRange === '1m') cutoff.setMonth(now.getMonth() - 1);
+                if(timeRange === '1y') cutoff.setFullYear(now.getFullYear() - 1);
+
+                const filteredData = rawData.filter(d => d.dateObj >= cutoff);
+                
+                const total = filteredData.length;
+                const nokList = filteredData.filter(d => d.status !== 'OK');
+                const ok = total - nokList.length;
+
+                // Calculate stats per transporter
+                const stats = {};
+                filteredData.forEach(d => {
+                    const name = d.plate || 'Inconnu';
+                    if(!stats[name]) stats[name] = { total: 0, ok: 0, nok: 0 };
+                    stats[name].total++;
+                    if(d.status === 'OK') stats[name].ok++;
+                    else stats[name].nok++;
+                });
+
+                const byTransporter = Object.entries(stats).map(([name, s]) => ({
+                    name,
+                    percent: s.total ? Math.round((s.ok / s.total) * 100) : 0,
+                    total: s.total,
+                    nok: s.nok
+                })).sort((a,b) => a.percent - b.percent);
+
+                setKpi({ total, ok, nok: nokList.length, byTransporter });
+
+            }, [rawData, timeRange]);
+
+            const exportCSV = () => {
+                if(!rawData.length) return;
+                const headers = "Date;Heure;Transporteur;BL;Statut;Commentaire;Auteur\n";
+                const rows = rawData.map(d => {
+                    const date = d.dateObj ? d.dateObj.toLocaleDateString() : '-';
+                    const time = d.dateObj ? d.dateObj.toLocaleTimeString() : '-';
+                    const bl = d.blNumber || '-';
+                    const cleanComment = (d.problem || '').replace(/;/g, ',');
+                    return `${date};${time};${d.plate};${bl};${d.status};${cleanComment};${d.userId}`;
+                }).join("\n");
+
+                const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `export_logistique_${new Date().toISOString().slice(0,10)}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            const okPercent = kpi.total ? Math.round((kpi.ok / kpi.total) * 100) : 0;
+
+            return (
+                <div className="pt-6 animate-fade-in pb-24 space-y-6">
+                     <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-3xl font-black dark:text-white uppercase tracking-tight">Performance</h2>
+                        <button onClick={exportCSV} className="bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-lg active:scale-95 flex items-center gap-2">
+                             <Icons.Download className="w-4 h-4" /> Export
+                        </button>
+                     </div>
+
+                     <div className="flex bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-800">
+                        {['7d', '1m', '1y'].map(r => (
+                            <button key={r} onClick={() => setTimeRange(r)} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${timeRange === r ? 'bg-slate-100 dark:bg-slate-800 text-blue-600' : 'text-slate-400'}`}>
+                                {r === '7d' ? '7 Jours' : r === '1m' ? '1 Mois' : '1 An'}
+                            </button>
+                        ))}
+                     </div>
+                     
+                     <div className="bg-slate-900 dark:bg-slate-800 rounded-[2.5rem] p-8 text-white text-center shadow-lg relative overflow-hidden">
+                        <div className="relative z-10">
+                            <span className="text-6xl font-black block mb-2">{okPercent}%</span>
+                            <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Taux de conformité Global</span>
+                            <span className="text-[10px] text-slate-500 mt-2 block font-mono">{kpi.total} arrivages analysés</span>
+                        </div>
+                        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-blue-500/10 to-transparent"></div>
+                     </div>
+
+                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-6">
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Détail par Transporteur</h3>
+                        <div className="space-y-4">
+                            {kpi.byTransporter.length > 0 ? kpi.byTransporter.map((t, i) => (
+                                <div key={t.name} className="space-y-1">
+                                    <div className="flex justify-between items-center text-xs font-bold dark:text-white">
+                                        <span>{t.name}</span>
+                                        <span className={t.percent < 80 ? 'text-rose-500' : 'text-emerald-500'}>{t.percent}%</span>
+                                    </div>
+                                    <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                        <div 
+                                            className={`h-full rounded-full ${t.percent < 50 ? 'bg-rose-500' : t.percent < 80 ? 'bg-amber-400' : 'bg-emerald-500'}`} 
+                                            style={{width: `${t.percent}%`}}
+                                        ></div>
+                                    </div>
+                                    <div className="flex justify-end text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                                        {t.total} voyages • {t.nok} litiges
+                                    </div>
+                                </div>
+                            )) : <p className="text-center text-xs text-slate-400 italic">Aucune donnée sur cette période</p>}
+                        </div>
+                     </div>
+                </div>
+            );
+        };
+
+        const RecipientManager = ({ onLogout, isDark, onToggleDark }) => {
+            const [emails, setEmails] = useState([]);
+            const [transporters, setTransporters] = useState([]);
+            const [newMail, setNewMail] = useState('');
+            const [newTransporter, setNewTransporter] = useState('');
+            
+            useEffect(() => { 
+                const unsubE = db.collection(`artifacts/${appId}/public/data/recipients`).onSnapshot(snap => setEmails(snap.docs.map(d => ({id: d.id, ...d.data()}))));
+                const unsubT = db.collection(`artifacts/${appId}/public/data/transporters`).onSnapshot(snap => setTransporters(snap.docs.map(d => ({id: d.id, ...d.data()}))));
+                return () => { unsubE(); unsubT(); };
+            }, []);
+            
+            const addEmail = (e) => { e.preventDefault(); if(newMail && newMail.includes('@')) db.collection(`artifacts/${appId}/public/data/recipients`).add({email: newMail.trim().toLowerCase()}); setNewMail(''); };
+            const addTransporter = (e) => { e.preventDefault(); if(newTransporter) db.collection(`artifacts/${appId}/public/data/transporters`).add({name: newTransporter.trim().toUpperCase()}); setNewTransporter(''); };
+            
+            return (
+                <div className="animate-fade-in pb-24 pt-6 space-y-8">
+                    <h2 className="text-3xl font-black dark:text-white uppercase tracking-tight">Réglages</h2>
+                    
+                    <div className="space-y-4">
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 flex items-center gap-2"><Icons.Sun className="w-3 h-3"/> Interface</h3>
+                        <button onClick={onToggleDark} className="w-full flex justify-between items-center p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] shadow-sm transition-all active:scale-[0.98]">
+                            <span className="text-sm font-bold dark:text-slate-300">Mode d'affichage</span>
+                            <div className="flex items-center gap-2 text-xs font-black text-slate-400 uppercase">
+                                {isDark ? "Sombre" : "Clair"}
+                                {isDark ? <Icons.Moon className="w-5 h-5 text-blue-500" /> : <Icons.Sun className="w-5 h-5 text-amber-500" />}
+                            </div>
+                        </button>
+                    </div>
+
+                    <div className="space-y-4">
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 flex items-center gap-2"><Icons.Truck className="w-3 h-3"/> Gestion Transporteurs</h3>
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-6 space-y-4 shadow-sm">
+                            <div className="space-y-2 max-h-40 overflow-y-auto">
+                                {transporters.length > 0 ? transporters.map(t => (
+                                    <div key={t.id} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-950 rounded-2xl border dark:border-slate-800 font-bold text-xs dark:text-white">
+                                        <span className="truncate flex-1 mr-2">{t.name}</span>
+                                        <button onClick={() => db.collection(`artifacts/${appId}/public/data/transporters`).doc(t.id).delete()} className="text-rose-400 p-2 hover:bg-rose-50 rounded-xl transition-colors"><Icons.Trash2 className="w-4 h-4"/></button>
+                                    </div>
+                                )) : <p className="text-xs text-slate-400 text-center py-4 italic">Aucun transporteur défini.</p>}
+                            </div>
+                            <form onSubmit={addTransporter} className="flex gap-2 pt-4 border-t dark:border-slate-800">
+                                <input type="text" value={newTransporter} onChange={e => setNewTransporter(e.target.value)} placeholder="Nom transporteur..." className="flex-1 p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20 dark:text-white"/>
+                                <button type="submit" className="bg-slate-900 dark:bg-white dark:text-slate-950 text-white dark:text-slate-900 p-4 rounded-2xl shadow-xl transition-all active:scale-95"><Icons.Plus className="w-5 h-5"/></button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 flex items-center gap-2"><Icons.Mail className="w-3 h-3"/> Destinataires Alertes</h3>
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-6 space-y-4 shadow-sm">
+                            <div className="space-y-2 max-h-40 overflow-y-auto">
+                                {emails.length > 0 ? emails.map(m => (
+                                    <div key={m.id} className="flex justify-between items-center p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border dark:border-slate-800 font-bold text-xs dark:text-white">
+                                        <span className="truncate flex-1 mr-2">{m.email}</span>
+                                        <button onClick={() => db.collection(`artifacts/${appId}/public/data/recipients`).doc(m.id).delete()} className="text-rose-400 p-2 hover:bg-rose-50 rounded-xl transition-colors"><Icons.Trash2 className="w-4 h-4"/></button>
+                                    </div>
+                                )) : <p className="text-xs text-slate-400 text-center py-4 italic">Aucun destinataire configuré.</p>}
+                            </div>
+                            <form onSubmit={addEmail} className="flex gap-2 pt-4 border-t dark:border-slate-800">
+                                <input type="email" value={newMail} onChange={e => setNewMail(e.target.value)} placeholder="Ajouter un email..." className="flex-1 p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs outline-none focus:ring-2 focus:ring-blue-500/20 dark:text-white"/>
+                                <button type="submit" className="bg-slate-900 dark:bg-white dark:text-slate-950 text-white dark:text-slate-900 p-4 rounded-2xl shadow-xl transition-all active:scale-95"><Icons.Plus className="w-5 h-5"/></button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 flex items-center gap-2"><Icons.User className="w-3 h-3"/> Session</h3>
+                        <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] shadow-sm space-y-6">
+                            <div className="flex items-center gap-4 text-sm font-bold dark:text-slate-400">
+                                <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400"><Icons.User className="w-5 h-5" /></div>
+                                {auth.currentUser?.email}
+                            </div>
+                            <button onClick={onLogout} className="w-full py-4 bg-rose-500 text-white rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest shadow-xl shadow-rose-500/20 active:scale-95 transition-transform">Quitter l'application</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [view, setView] = useState('HOME');
+            const [loading, setLoading] = useState(true);
+            const [isDark, setIsDark] = useState(false);
+
+            useEffect(() => { return auth.onAuthStateChanged(u => { setUser(u); setLoading(false); }); }, []);
+            useEffect(() => { document.documentElement.classList.toggle('dark', isDark); }, [isDark]);
+
+            if (loading) return <div className="min-h-screen flex items-center justify-center dark:bg-slate-950 transition-colors"><Icons.Loader2 className="w-8 h-8 text-blue-500" /></div>;
+            if (!user) return <LoginView />;
+
+            return (
+                <div className="max-w-md mx-auto min-h-screen relative flex flex-col px-6">
+                    <div className="flex-1">
+                        {view === 'HOME' && <HomeView setView={setView} />}
+                        {view === 'LITIGE' && <LitigeView user={user} />}
+                        {view === 'PLANNING' && <PlanningView />}
+                        {view === 'RESULTS' && <ResultsView />}
+                        {view === 'SETTINGS' && <RecipientManager onLogout={() => auth.signOut()} isDark={isDark} onToggleDark={() => setIsDark(!isDark)} />}
+                    </div>
+
+                    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[94%] max-w-sm bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border border-white/20 dark:border-slate-800 rounded-[2.8rem] flex justify-around p-2.5 shadow-2xl z-50 ring-1 ring-slate-900/5 transition-all">
+                        {[
+                            { id: 'HOME', icon: Icons.Home, label: 'Accueil' },
+                            { id: 'LITIGE', icon: Icons.List, label: 'Flux' },
+                            { id: 'PLANNING', icon: Icons.Calendar, label: 'Plan' },
+                            { id: 'RESULTS', icon: Icons.BarChart, label: 'Stats' },
+                            { id: 'SETTINGS', icon: Icons.Settings, label: 'Outils' }
+                        ].map(m => (
+                            <button key={m.id} onClick={() => setView(m.id)} className={`flex flex-col items-center py-3 px-5 rounded-[2rem] transition-all duration-300 ${view === m.id ? 'text-blue-600 bg-blue-50/80 dark:bg-blue-900/30 scale-105 shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}>
+                                <m.icon className={`w-5 h-5 ${view === m.id ? 'stroke-[2.5]' : 'stroke-[1.5]'}`} />
+                                <span className="text-[7px] font-black mt-1.5 uppercase tracking-[0.1em]">{m.label}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
