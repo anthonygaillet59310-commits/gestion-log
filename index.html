@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Toyota Logistics - Gestion Camions V7</title>
+    <title>Toyota Logistics - Gestion Camions V8</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -551,6 +551,34 @@
                 setActiveTab('new');
             };
 
+            const generateMailBody = (data) => {
+                const epiStatus = (key) => data.epi[key] ? "OUI" : "NON";
+                return `
+RAPPORT D'INCIDENT LOGISTIQUE - TOYOTA
+=============================================================
+
+DÉTAILS DE LA RÉCEPTION
+-------------------------------------------------------------
+📅 Date         : ${new Date().toLocaleString('fr-FR')}
+🚛 Transporteur : ${data.plate.toUpperCase()}
+📄 Numéro BL    : ${data.blNumber || 'Non renseigné'}
+⚠️ Statut       : ${data.status}
+
+DESCRIPTION DU LITIGE
+-------------------------------------------------------------
+${data.problem || "Aucun commentaire détaillé."}
+
+CONTRÔLE SÉCURITÉ (EPI)
+-------------------------------------------------------------
+🦺 Gilet Jaune        : ${epiStatus('gilet')}
+🥾 Chaussures Sécu.   : ${epiStatus('chaussures')}
+📋 Protocole Sécurité : ${epiStatus('protocole')}
+
+=============================================================
+Ceci est une notification automatique. Merci de ne pas répondre.
+`.trim();
+            };
+
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 setLoading(true);
@@ -569,7 +597,14 @@
                     
                     if (status !== 'OK' && selectedRecipients.length > 0) {
                         const subject = encodeURIComponent(`ALERTE LOGISTIQUE : ${transporter}`);
-                        const body = encodeURIComponent(`Litige déclaré.\n\nTransporteur: ${transporter}\nBL: ${blNumber}\nStatut: ${status}\nNotes: ${problem}\nEPI: ${JSON.stringify(epiCheck)}\nDate: ${new Date().toLocaleString()}`);
+                        // Use the structured mail body generator
+                        const body = encodeURIComponent(generateMailBody({
+                            plate: transporter,
+                            blNumber,
+                            status,
+                            problem,
+                            epi: epiCheck
+                        }));
                         window.location.href = `mailto:${selectedRecipients.join(',')}?subject=${subject}&body=${body}`;
                     }
                 }
