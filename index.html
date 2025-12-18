@@ -594,19 +594,18 @@ Ceci est une notification automatique. Merci de ne pas répondre.
                 } else {
                     data.resolved = false;
                     await db.collection(`artifacts/${appId}/public/data/arrivals`).add(data);
-                    
-                    if (status !== 'OK' && selectedRecipients.length > 0) {
-                        const subject = encodeURIComponent(`ALERTE LOGISTIQUE : ${transporter}`);
-                        // Use the structured mail body generator
-                        const body = encodeURIComponent(generateMailBody({
-                            plate: transporter,
-                            blNumber,
-                            status,
-                            problem,
-                            epi: epiCheck
-                        }));
-                        window.location.href = `mailto:${selectedRecipients.join(',')}?subject=${subject}&body=${body}`;
-                    }
+                }
+
+                if (selectedRecipients.length > 0) {
+                    const subject = encodeURIComponent(`ALERTE LOGISTIQUE : ${transporter}`);
+                    const body = encodeURIComponent(generateMailBody({
+                        plate: transporter,
+                        blNumber,
+                        status,
+                        problem,
+                        epi: epiCheck
+                    }));
+                    window.location.href = `mailto:${selectedRecipients.join(',')}?subject=${subject}&body=${body}`;
                 }
 
                 setLoading(false); 
@@ -767,7 +766,7 @@ Ceci est une notification automatique. Merci de ne pas répondre.
                                 </div>
                                 <select value={selectedWeek} onChange={e => setSelectedWeek(e.target.value)} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 text-xs font-black outline-none dark:text-white shadow-sm uppercase tracking-tighter">
                                     <option value="all">S-TOUTES</option>
-                                    {availableWeeks.map(w => <option key={w} value={w}>S-{w}</option>)}
+                                    {availableWeeks.map(w => <option key={w} value={w}>Semaine {w}</option>)}
                                 </select>
                             </div>
 
