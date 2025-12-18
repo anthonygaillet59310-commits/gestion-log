@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Toyota Logistics - Gestion Camions V2</title>
+    <title>Toyota Logistics - Gestion Camions V7</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -95,6 +95,8 @@
             Shield: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
             FileText: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>,
             Camera: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>,
+            Edit: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>,
+            Box: (p) => <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
         };
 
         // --- 2. UTILS ---
@@ -215,7 +217,6 @@
 
             // --- PHOTO PREUVE ---
             if(item.photo) {
-                // S'assurer qu'il reste de la place sur la page, sinon nouvelle page
                 if (y > height - 120) {
                     doc.addPage();
                     y = 20;
@@ -461,6 +462,7 @@
             const [searchTerm, setSearchTerm] = useState('');
             const [selectedWeek, setSelectedWeek] = useState('all');
             const [expandedId, setExpandedId] = useState(null);
+            const [editingId, setEditingId] = useState(null);
             
             const [epiCheck, setEpiCheck] = useState({ gilet: false, chaussures: false, protocole: false });
             const [signature, setSignature] = useState(null);
@@ -473,7 +475,8 @@
                 const unsubR = db.collection(`artifacts/${appId}/public/data/recipients`).onSnapshot(snap => {
                     const emails = snap.docs.map(d => d.data().email);
                     setRecipients(emails);
-                    setSelectedRecipients(emails);
+                    // Sélection par défaut : AUCUN
+                    if (!editingId) setSelectedRecipients([]);
                 });
                 const unsubT = db.collection(`artifacts/${appId}/public/data/transporters`).onSnapshot(snap => {
                     setTransportersList(snap.docs.map(d => d.data().name));
@@ -483,7 +486,7 @@
                     if(doc.exists) setDailyPlanning(doc.data().entries || []);
                 });
                 return () => { unsubA(); unsubR(); unsubT(); };
-            }, []);
+            }, [editingId]);
 
             const availableWeeks = useMemo(() => {
                 const weeks = list.map(i => i.date ? getWeekNumber(i.date) : null).filter(Boolean);
@@ -501,6 +504,14 @@
                 setSelectedRecipients(prev => prev.includes(email) ? prev.filter(e => e !== email) : [...prev, email]);
             };
 
+            const toggleAllRecipients = () => {
+                if (selectedRecipients.length === recipients.length) {
+                    setSelectedRecipients([]);
+                } else {
+                    setSelectedRecipients(recipients);
+                }
+            };
+
             const handlePhoto = (e) => {
                 const file = e.target.files[0];
                 if (file) {
@@ -510,7 +521,7 @@
                         img.onload = () => {
                             const canvas = document.createElement('canvas');
                             const ctx = canvas.getContext('2d');
-                            const maxDim = 800; // Resize to max 800px to save DB space
+                            const maxDim = 800;
                             let w = img.width;
                             let h = img.height;
                             if (w > h) { if (w > maxDim) { h *= maxDim / w; w = maxDim; } } 
@@ -526,25 +537,47 @@
                 }
             };
 
+            const startEdit = (item) => {
+                setEditingId(item.id);
+                setTransporter(item.plate);
+                setBlNumber(item.blNumber || '');
+                setStatus(item.status);
+                setProblem(item.problem || '');
+                setEpiCheck(item.epi || { gilet: false, chaussures: false, protocole: false });
+                setSelectedRecipients(item.recipients || []);
+                setSignature(item.signature);
+                setPhoto(item.photo);
+                setStep(2);
+                setActiveTab('new');
+            };
+
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 setLoading(true);
                 
-                if (status !== 'OK' && selectedRecipients.length > 0) {
-                    const subject = encodeURIComponent(`ALERTE LOGISTIQUE : ${transporter}`);
-                    const body = encodeURIComponent(`Litige déclaré.\n\nTransporteur: ${transporter}\nBL: ${blNumber}\nStatut: ${status}\nNotes: ${problem}\nEPI: ${JSON.stringify(epiCheck)}\nDate: ${new Date().toLocaleString()}`);
-                    window.location.href = `mailto:${selectedRecipients.join(',')}?subject=${subject}&body=${body}`;
-                }
-
-                await db.collection(`artifacts/${appId}/public/data/arrivals`).add({
-                    plate: transporter, blNumber, status, problem, userId: user.uid, resolved: false, 
+                const data = {
+                    plate: transporter, blNumber, status, problem, userId: user.uid, 
                     recipients: selectedRecipients, epi: epiCheck, signature: signature, photo: photo,
                     timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                };
+
+                if (editingId) {
+                    await db.collection(`artifacts/${appId}/public/data/arrivals`).doc(editingId).update(data);
+                } else {
+                    data.resolved = false;
+                    await db.collection(`artifacts/${appId}/public/data/arrivals`).add(data);
+                    
+                    if (status !== 'OK' && selectedRecipients.length > 0) {
+                        const subject = encodeURIComponent(`ALERTE LOGISTIQUE : ${transporter}`);
+                        const body = encodeURIComponent(`Litige déclaré.\n\nTransporteur: ${transporter}\nBL: ${blNumber}\nStatut: ${status}\nNotes: ${problem}\nEPI: ${JSON.stringify(epiCheck)}\nDate: ${new Date().toLocaleString()}`);
+                        window.location.href = `mailto:${selectedRecipients.join(',')}?subject=${subject}&body=${body}`;
+                    }
+                }
+
                 setLoading(false); 
-                // Reset form
                 setStep(1); setTransporter(''); setBlNumber(''); setProblem(''); setStatus('OK'); 
                 setEpiCheck({ gilet: false, chaussures: false, protocole: false }); setSignature(null); setPhoto(null);
+                setEditingId(null); setSelectedRecipients([]);
                 setActiveTab('history');
             };
 
@@ -590,12 +623,12 @@
                             </div>
                         ) : (
                             <form onSubmit={handleSubmit} className="space-y-6">
-                                <div className="flex items-center gap-2 text-slate-400 cursor-pointer" onClick={() => setStep(1)}>
+                                <div className="flex items-center gap-2 text-slate-400 cursor-pointer" onClick={() => { setStep(1); setEditingId(null); }}>
                                     <Icons.ChevronLeft className="w-4 h-4" />
                                     <span className="text-[10px] font-black uppercase tracking-widest">Retour</span>
                                 </div>
                                 <div>
-                                    <h2 className="text-2xl font-black dark:text-white uppercase tracking-tight">{transporter}</h2>
+                                    <h2 className="text-2xl font-black dark:text-white uppercase tracking-tight">{editingId ? 'Modification' : 'Nouveau'} : {transporter}</h2>
                                     <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Détails livraison</p>
                                 </div>
 
@@ -663,19 +696,30 @@
                                 </div>
 
                                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-3xl shadow-sm">
-                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Icons.Mail className="w-3 h-3 text-blue-500"/> Notifier par Email</h4>
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Icons.Mail className="w-3 h-3 text-blue-500"/> Destinataires</h4>
+                                        <button type="button" onClick={toggleAllRecipients} className="text-[10px] text-blue-500 font-bold hover:underline">
+                                            {selectedRecipients.length === recipients.length ? 'Tout décocher' : 'Tout cocher'}
+                                        </button>
+                                    </div>
                                     <div className="space-y-2 max-h-40 overflow-y-auto">
                                         {recipients.length > 0 ? recipients.map(email => (
-                                            <label key={email} className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-colors border ${selectedRecipients.includes(email) ? 'bg-blue-50 border-blue-100 dark:bg-blue-900/20' : 'bg-slate-50 border-transparent dark:bg-slate-800/50'}`}>
-                                                <input type="checkbox" checked={selectedRecipients.includes(email)} onChange={() => toggleRecipient(email)} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-                                                <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{email}</span>
-                                            </label>
+                                            <div key={email} className={`flex items-center gap-3 p-3 rounded-2xl border transition-colors ${selectedRecipients.includes(email) ? 'bg-blue-50 border-blue-100 dark:bg-blue-900/20' : 'bg-slate-50 border-transparent dark:bg-slate-800/50'}`}>
+                                                <input 
+                                                    type="checkbox" 
+                                                    id={`chk-${email}`}
+                                                    checked={selectedRecipients.includes(email)} 
+                                                    onChange={() => toggleRecipient(email)} 
+                                                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" 
+                                                />
+                                                <label htmlFor={`chk-${email}`} className="text-xs font-bold text-slate-600 dark:text-slate-300 cursor-pointer flex-1">{email}</label>
+                                            </div>
                                         )) : <p className="text-[10px] text-slate-400 italic">Aucun destinataire.</p>}
                                     </div>
                                 </div>
 
                                 <button type="submit" disabled={loading} className="w-full py-5 bg-blue-600 text-white rounded-[2rem] font-black text-sm shadow-2xl shadow-blue-600/20 transition-transform active:scale-95 flex items-center justify-center gap-3">
-                                    {loading ? <Icons.Loader2 className="w-5 h-5" /> : <>Finaliser l'arrivage <Icons.ChevronRight className="w-4 h-4" /></>}
+                                    {loading ? <Icons.Loader2 className="w-5 h-5" /> : <>{editingId ? "Mettre à jour" : "Finaliser l'arrivage"} <Icons.ChevronRight className="w-4 h-4" /></>}
                                 </button>
                             </form>
                         )
@@ -698,12 +742,13 @@
                                     const isExp = expandedId === item.id;
                                     const week = getWeekNumber(item.date);
                                     return (
-                                        <div key={item.id} onClick={() => setExpandedId(isExp ? null : item.id)} className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-[2rem] transition-all cursor-pointer shadow-sm ${isExp ? 'ring-2 ring-blue-500/20' : ''}`}>
+                                        <div key={item.id} onClick={() => setExpandedId(isExp ? null : item.id)} className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-[2rem] transition-all cursor-pointer shadow-sm ${isExp ? 'ring-2 ring-blue-500/20' : ''} ${item.resolved ? 'opacity-70 grayscale-[0.5]' : ''}`}>
                                             <div className="flex justify-between items-start">
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2 mb-1">
                                                         <span className="font-black text-slate-800 dark:text-white">{item.plate}</span>
                                                         <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border border-${st.color}-200 text-${st.color}-600 bg-${st.color}-50 uppercase tracking-widest`}>{st.label}</span>
+                                                        {item.resolved && <span className="text-[8px] font-black px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 uppercase tracking-widest">Traité</span>}
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{item.date?.toLocaleDateString()} • {item.date?.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
@@ -720,7 +765,6 @@
                                                             {item.epi && Object.entries(item.epi).map(([k,v]) => v && <span key={k} className="text-[8px] px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg uppercase font-bold">{k}</span>)}
                                                             {item.photo && <span className="text-[8px] px-2 py-1 bg-blue-100 text-blue-700 rounded-lg uppercase font-bold flex items-center gap-1"><Icons.Camera className="w-3 h-3"/> Photo jointe</span>}
                                                         </div>
-                                                        {/* Affichage de la photo dans l'historique si étendue */}
                                                         {item.photo && (
                                                             <div className="mt-2 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">
                                                                 <img src={item.photo} alt="Preuve" className="w-full h-auto max-h-48 object-cover" />
@@ -728,15 +772,16 @@
                                                         )}
                                                     </div>
                                                     
-                                                    <div className="grid grid-cols-2 gap-2">
+                                                    <div className="grid grid-cols-3 gap-2">
                                                         <button onClick={() => generatePDF(item)} className="py-3 bg-slate-900 text-white dark:bg-white dark:text-black rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2">
                                                             <Icons.FileText className="w-3 h-3"/> PDF
                                                         </button>
-                                                        {item.status !== 'OK' && (
-                                                            <button onClick={(e) => toggleResolved(e, item.id, item.resolved)} className={`py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm ${item.resolved ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-500 text-white shadow-amber-500/20'}`}>
-                                                                {item.resolved ? 'Traité' : 'Clôturer'}
-                                                            </button>
-                                                        )}
+                                                        <button onClick={() => startEdit(item)} className="py-3 bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2 shadow-blue-500/20">
+                                                            <Icons.Edit className="w-3 h-3"/> Modif
+                                                        </button>
+                                                        <button onClick={(e) => toggleResolved(e, item.id, item.resolved)} className={`py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm ${item.resolved ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-emerald-500 text-white shadow-emerald-500/20'}`}>
+                                                            {item.resolved ? 'Réouvrir' : 'Clôturer'}
+                                                        </button>
                                                     </div>
 
                                                     <div className="flex justify-between items-center text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">
@@ -761,12 +806,17 @@
             const [selectedDay, setSelectedDay] = useState(null);
             const [data, setData] = useState({});
             const [newE, setNewE] = useState({ driver: '', time: '', dock: 'Quai 1' });
+            const [transportersList, setTransportersList] = useState([]);
 
             useEffect(() => {
-                return db.collection(`artifacts/${appId}/public/data/planning`).onSnapshot(snap => {
+                const unsub = db.collection(`artifacts/${appId}/public/data/planning`).onSnapshot(snap => {
                     const d = {}; snap.docs.forEach(doc => d[doc.id] = doc.data().entries || []);
                     setData(d);
                 });
+                const unsubT = db.collection(`artifacts/${appId}/public/data/transporters`).onSnapshot(snap => {
+                    setTransportersList(snap.docs.map(d => d.data().name));
+                });
+                return () => { unsub(); unsubT(); };
             }, []);
 
             const save = (day, entries) => db.collection(`artifacts/${appId}/public/data/planning`).doc(day).set({ entries }, { merge: true });
@@ -808,7 +858,10 @@
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 text-center">Ajouter un créneau</p>
                                 <div className="flex gap-2">
                                     <input type="time" value={newE.time} onChange={x=>setNewE({...newE, time: x.target.value})} className="w-24 p-4 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold dark:text-white outline-none" />
-                                    <input placeholder="Société..." value={newE.driver} onChange={x=>setNewE({...newE, driver: x.target.value})} className="flex-1 p-4 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold dark:text-white outline-none" />
+                                    <input list="transporters-list" placeholder="Société..." value={newE.driver} onChange={x=>setNewE({...newE, driver: x.target.value})} className="flex-1 p-4 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold dark:text-white outline-none" />
+                                    <datalist id="transporters-list">
+                                        {transportersList.map(t => <option key={t} value={t} />)}
+                                    </datalist>
                                 </div>
                                 <select value={newE.dock} onChange={e=>setNewE({...newE, dock: e.target.value})} className="w-full p-4 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs font-bold dark:text-white outline-none">
                                     {dockOptions.map(o => <option key={o} value={o}>{o}</option>)}
@@ -821,10 +874,127 @@
             );
         };
 
+        // --- NEW DETAIL COMPONENT ---
+        const DetailView = ({ data, onBack, title }) => {
+            const epiStats = { gilet: 0, chaussures: 0, protocole: 0, totalChecks: 0 };
+            let lateCount = 0;
+            let damagedCount = 0;
+            let missingCount = 0;
+            
+            data.forEach(d => {
+                if(d.status === 'LATE') lateCount++;
+                if(d.status === 'DAMAGED') damagedCount++;
+                if(d.status === 'MISSING') missingCount++;
+                if(d.epi) {
+                    epiStats.totalChecks++;
+                    if(d.epi.gilet) epiStats.gilet++;
+                    if(d.epi.chaussures) epiStats.chaussures++;
+                    if(d.epi.protocole) epiStats.protocole++;
+                }
+            });
+
+            const total = data.length;
+            const onTimePct = total ? Math.round(((total - lateCount) / total) * 100) : 0;
+            const damagedPct = total ? Math.round((damagedCount / total) * 100) : 0;
+            const missingPct = total ? Math.round((missingCount / total) * 100) : 0;
+            
+            const getEpiPct = (key) => epiStats.totalChecks ? Math.round((epiStats[key] / epiStats.totalChecks) * 100) : 0;
+
+            return (
+                <div className="animate-fade-in pb-24 space-y-6 pt-4">
+                    <button onClick={onBack} className="flex items-center gap-2 text-slate-400 mb-2">
+                        <Icons.ChevronLeft className="w-4 h-4" /><span className="text-[10px] font-black uppercase tracking-widest">Retour Statistiques</span>
+                    </button>
+                    
+                    <div>
+                        <h2 className="text-3xl font-black dark:text-white uppercase tracking-tight">{title}</h2>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{data.length} Arrivages enregistrés</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                        {/* Qualité Livraison (Dommages/Manquants) */}
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-6 shadow-sm">
+                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Icons.Box className="w-3 h-3"/> Typologie des Litiges</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-4 bg-rose-50 dark:bg-rose-900/20 rounded-xl border border-rose-100 dark:border-rose-800">
+                                    <div className="text-rose-600 dark:text-rose-400 font-bold text-xs mb-1">Dommages</div>
+                                    <div className="text-2xl font-black dark:text-white">{damagedCount} <span className="text-xs font-bold opacity-50">({damagedPct}%)</span></div>
+                                    <div className="h-1.5 bg-rose-200 dark:bg-rose-900 rounded-full mt-2 overflow-hidden">
+                                        <div style={{width: `${damagedPct}%`}} className="h-full bg-rose-500 rounded-full"></div>
+                                    </div>
+                                </div>
+                                <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800">
+                                    <div className="text-amber-600 dark:text-amber-400 font-bold text-xs mb-1">Manquants</div>
+                                    <div className="text-2xl font-black dark:text-white">{missingCount} <span className="text-xs font-bold opacity-50">({missingPct}%)</span></div>
+                                    <div className="h-1.5 bg-amber-200 dark:bg-amber-900 rounded-full mt-2 overflow-hidden">
+                                        <div style={{width: `${missingPct}%`}} className="h-full bg-amber-500 rounded-full"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Ponctualité */}
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-6 shadow-sm">
+                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Icons.Clock className="w-3 h-3"/> Ponctualité</h3>
+                            <div className="flex items-end gap-2 mb-2">
+                                <span className="text-4xl font-black dark:text-white">{onTimePct}%</span>
+                                <span className="text-xs font-bold text-slate-400 mb-1">à l'heure</span>
+                            </div>
+                            <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                                <div style={{width: `${onTimePct}%`}} className="bg-emerald-500 h-full"></div>
+                                <div style={{width: `${100-onTimePct}%`}} className="bg-rose-500 h-full"></div>
+                            </div>
+                            <div className="flex justify-between mt-2 text-[9px] font-bold uppercase text-slate-400">
+                                <span>OK: {total - lateCount}</span>
+                                <span>Retard: {lateCount}</span>
+                            </div>
+                        </div>
+
+                        {/* EPI */}
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2rem] p-6 shadow-sm">
+                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Icons.Shield className="w-3 h-3"/> Respect EPI & Sécurité</h3>
+                            <div className="space-y-4">
+                                {['Gilet', 'Chaussures', 'Protocole'].map(item => {
+                                    const key = item.toLowerCase();
+                                    const pct = getEpiPct(key);
+                                    return (
+                                        <div key={item}>
+                                            <div className="flex justify-between text-xs font-bold dark:text-white mb-1">
+                                                <span>{item}</span>
+                                                <span className={pct < 100 ? 'text-rose-500' : 'text-emerald-500'}>{pct}%</span>
+                                            </div>
+                                            <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                <div style={{width: `${pct}%`}} className={`h-full rounded-full ${pct < 80 ? 'bg-rose-500' : pct < 100 ? 'bg-amber-400' : 'bg-emerald-500'}`}></div>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </div>
+
+                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-8">Historique {title}</h3>
+                    <div className="space-y-3">
+                        {data.map(item => (
+                            <div key={item.id} className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                                <div className="flex justify-between items-start mb-2">
+                                    <span className="text-xs font-bold dark:text-white">{item.dateObj?.toLocaleDateString()}</span>
+                                    <span className={`text-[8px] font-black px-2 py-0.5 rounded-full uppercase ${item.status==='OK'?'bg-emerald-100 text-emerald-700':'bg-rose-100 text-rose-700'}`}>{item.status}</span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 italic mb-2">{item.problem || 'Aucun commentaire'}</p>
+                                {item.blNumber && <span className="text-[9px] font-bold bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-600">BL: {item.blNumber}</span>}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
         const ResultsView = () => {
             const [kpi, setKpi] = useState({ total: 0, ok: 0, nok: 0, byTransporter: [] });
-            const [timeRange, setTimeRange] = useState('7d'); // '7d', '1m', '1y'
+            const [selectedWeek, setSelectedWeek] = useState('all');
             const [rawData, setRawData] = useState([]);
+            const [viewDetail, setViewDetail] = useState(null);
 
             useEffect(() => {
                 const unsub = db.collection(`artifacts/${appId}/public/data/arrivals`).onSnapshot(snap => {
@@ -834,23 +1004,32 @@
                 return unsub;
             }, []);
 
+            const availableWeeks = useMemo(() => {
+                if (!rawData.length) return [];
+                const weeks = new Set();
+                rawData.forEach(d => {
+                    if (d.dateObj) {
+                        const w = getWeekNumber(d.dateObj);
+                        weeks.add(w);
+                    }
+                });
+                return Array.from(weeks).sort((a, b) => b - a);
+            }, [rawData]);
+
             useEffect(() => {
-                // Filter Data based on timeRange
                 if(!rawData.length) return;
 
-                const now = new Date();
-                const cutoff = new Date();
-                if(timeRange === '7d') cutoff.setDate(now.getDate() - 7);
-                if(timeRange === '1m') cutoff.setMonth(now.getMonth() - 1);
-                if(timeRange === '1y') cutoff.setFullYear(now.getFullYear() - 1);
-
-                const filteredData = rawData.filter(d => d.dateObj >= cutoff);
+                let filteredData = rawData;
                 
+                if (selectedWeek !== 'all') {
+                    const w = parseInt(selectedWeek);
+                    filteredData = rawData.filter(d => d.dateObj && getWeekNumber(d.dateObj) === w);
+                }
+
                 const total = filteredData.length;
                 const nokList = filteredData.filter(d => d.status !== 'OK');
                 const ok = total - nokList.length;
 
-                // Calculate stats per transporter
                 const stats = {};
                 filteredData.forEach(d => {
                     const name = d.plate || 'Inconnu';
@@ -868,8 +1047,17 @@
                 })).sort((a,b) => a.percent - b.percent);
 
                 setKpi({ total, ok, nok: nokList.length, byTransporter });
+            }, [rawData, selectedWeek]);
 
-            }, [rawData, timeRange]);
+            if(viewDetail) {
+                const details = rawData.filter(d => {
+                    const matchTransporter = (d.plate || 'Inconnu') === viewDetail;
+                    const matchWeek = selectedWeek === 'all' ? true : (d.dateObj && getWeekNumber(d.dateObj) === parseInt(selectedWeek));
+                    return matchTransporter && matchWeek;
+                });
+                details.sort((a,b) => b.dateObj - a.dateObj);
+                return <DetailView data={details} title={viewDetail} onBack={() => setViewDetail(null)} />;
+            }
 
             const exportCSV = () => {
                 if(!rawData.length) return;
@@ -881,12 +1069,11 @@
                     const cleanComment = (d.problem || '').replace(/;/g, ',');
                     return `${date};${time};${d.plate};${bl};${d.status};${cleanComment};${d.userId}`;
                 }).join("\n");
-
                 const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.setAttribute('href', url);
-                link.setAttribute('download', `export_logistique_${new Date().toISOString().slice(0,10)}.csv`);
+                link.setAttribute('download', `export_${new Date().toISOString().slice(0,10)}.csv`);
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -903,12 +1090,16 @@
                         </button>
                      </div>
 
-                     <div className="flex bg-white dark:bg-slate-900 p-1 rounded-2xl border border-slate-200 dark:border-slate-800">
-                        {['7d', '1m', '1y'].map(r => (
-                            <button key={r} onClick={() => setTimeRange(r)} className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${timeRange === r ? 'bg-slate-100 dark:bg-slate-800 text-blue-600' : 'text-slate-400'}`}>
-                                {r === '7d' ? '7 Jours' : r === '1m' ? '1 Mois' : '1 An'}
-                            </button>
-                        ))}
+                     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 mb-4 shadow-sm flex items-center gap-3">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Période :</span>
+                        <select 
+                            value={selectedWeek} 
+                            onChange={(e) => setSelectedWeek(e.target.value)} 
+                            className="flex-1 bg-transparent font-bold text-sm outline-none dark:text-white"
+                        >
+                            <option value="all">Tout l'historique</option>
+                            {availableWeeks.map(w => <option key={w} value={w}>Semaine {w}</option>)}
+                        </select>
                      </div>
                      
                      <div className="bg-slate-900 dark:bg-slate-800 rounded-[2.5rem] p-8 text-white text-center shadow-lg relative overflow-hidden">
@@ -921,10 +1112,10 @@
                      </div>
 
                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[2.5rem] p-6">
-                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Détail par Transporteur</h3>
+                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Détail par Transporteur (Cliquer pour voir)</h3>
                         <div className="space-y-4">
                             {kpi.byTransporter.length > 0 ? kpi.byTransporter.map((t, i) => (
-                                <div key={t.name} className="space-y-1">
+                                <div key={t.name} onClick={() => setViewDetail(t.name)} className="space-y-1 cursor-pointer hover:opacity-70 transition-opacity">
                                     <div className="flex justify-between items-center text-xs font-bold dark:text-white">
                                         <span>{t.name}</span>
                                         <span className={t.percent < 80 ? 'text-rose-500' : 'text-emerald-500'}>{t.percent}%</span>
